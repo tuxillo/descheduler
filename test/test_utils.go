@@ -100,6 +100,7 @@ func BuildTestPod(name string, cpu, memory int64, nodeName string, apply func(*v
 	if apply != nil {
 		apply(pod)
 	}
+
 	return pod
 }
 
@@ -340,6 +341,27 @@ func WaitForDeploymentPodsRunning(ctx context.Context, t *testing.T, clientSet c
 	}
 }
 
+func SetPodAffinity(inputPod *v1.Pod, labelKey, labelValue string) {
+	inputPod.Spec.Affinity = &v1.Affinity{
+		PodAffinity: &v1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
+				{
+					LabelSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      labelKey,
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{labelValue},
+							},
+						},
+					},
+					TopologyKey: "region",
+				},
+			},
+		},
+	}
+}
+
 func SetPodAntiAffinity(inputPod *v1.Pod, labelKey, labelValue string) {
 	inputPod.Spec.Affinity = &v1.Affinity{
 		PodAntiAffinity: &v1.PodAntiAffinity{
@@ -359,6 +381,12 @@ func SetPodAntiAffinity(inputPod *v1.Pod, labelKey, labelValue string) {
 			},
 		},
 	}
+}
+
+func PodWithPodAffinity(inputPod *v1.Pod, labelKey, labelValue string) *v1.Pod {
+	SetPodAffinity(inputPod, labelKey, labelValue)
+	inputPod.Labels = map[string]string{labelKey: labelValue}
+	return inputPod
 }
 
 func PodWithPodAntiAffinity(inputPod *v1.Pod, labelKey, labelValue string) *v1.Pod {

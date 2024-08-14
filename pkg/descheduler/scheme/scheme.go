@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removeduplicates"
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removefailedpods"
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodshavingtoomanyrestarts"
+	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatinginterpodaffinity"
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatinginterpodantiaffinity"
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingnodeaffinity"
 	"sigs.k8s.io/descheduler/pkg/framework/plugins/removepodsviolatingnodetaints"
@@ -50,6 +51,7 @@ func init() {
 	utilruntime.Must(removefailedpods.AddToScheme(Scheme))
 	utilruntime.Must(removepodshavingtoomanyrestarts.AddToScheme(Scheme))
 	utilruntime.Must(removepodsviolatinginterpodantiaffinity.AddToScheme(Scheme))
+	utilruntime.Must(removepodsviolatinginterpodaffinity.AddToScheme(Scheme))
 	utilruntime.Must(removepodsviolatingnodeaffinity.AddToScheme(Scheme))
 	utilruntime.Must(removepodsviolatingnodetaints.AddToScheme(Scheme))
 	utilruntime.Must(removepodsviolatingtopologyspreadconstraint.AddToScheme(Scheme))

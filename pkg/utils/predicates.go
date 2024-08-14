@@ -333,6 +333,51 @@ func CreateNodeMap(nodes []*v1.Node) map[string]*v1.Node {
 	return m
 }
 
+// CheckPodAffinityViolation checks affinity terms are not met
+func CheckPodAffinityViolation(candidatePod *v1.Pod, assignedPods map[string][]*v1.Pod, nodeMap map[string]*v1.Node) bool {
+	nodeHavingCandidatePod, ok := nodeMap[candidatePod.Spec.NodeName]
+	if !ok {
+		klog.Warningf("CandidatePod %s does not exist in nodeMap", klog.KObj(candidatePod))
+		return false
+	}
+
+	affinity := candidatePod.Spec.Affinity
+	if affinity == nil || affinity.PodAffinity == nil {
+		return false
+	}
+
+	for _, term := range GetPodAffinityTerms(affinity.PodAffinity) {
+		namespaces := GetNamespacesFromPodAffinityTerm(candidatePod, &term)
+		selector, err := metav1.LabelSelectorAsSelector(term.LabelSelector)
+		if err != nil {
+			klog.ErrorS(err, "Unable to convert LabelSelector into Selector")
+			return false
+		}
+
+		for namespace := range namespaces {
+			for _, assignedPod := range assignedPods[namespace] {
+				if assignedPod.Name == candidatePod.Name || !PodMatchesTermsNamespaceAndSelector(assignedPod, namespaces, selector) {
+					klog.V(4).InfoS("CandidatePod does not match inter-pod affinity rule of assigned pod on node", "candidatePod", klog.KObj(candidatePod), "assignedPod", klog.KObj(assignedPod))
+					continue
+				}
+
+				nodeHavingAssignedPod, ok := nodeMap[assignedPod.Spec.NodeName]
+				if !ok {
+					continue
+				}
+
+				if hasSameLabelValue(nodeHavingCandidatePod, nodeHavingAssignedPod, term.TopologyKey) {
+					klog.V(1).InfoS("CandidatePod matches inter-pod affinity rule of assigned pod on node", "candidatePod", klog.KObj(candidatePod), "assignedPod", klog.KObj(assignedPod))
+					return false
+				}
+			}
+		}
+	}
+
+	klog.V(1).Infof("CandidatePod did not match inter-pod affinity in node %v", candidatePod.Spec.NodeName)
+	return true
+}
+
 // CheckPodsWithAntiAffinityExist checks if there are other pods on the node that the current candidate pod cannot tolerate.
 func CheckPodsWithAntiAffinityExist(candidatePod *v1.Pod, assignedPods map[string][]*v1.Pod, nodeMap map[string]*v1.Node) bool {
 	nodeHavingCandidatePod, ok := nodeMap[candidatePod.Spec.NodeName]
@@ -382,6 +427,16 @@ func GetPodAntiAffinityTerms(podAntiAffinity *v1.PodAntiAffinity) (terms []v1.Po
 	if podAntiAffinity != nil {
 		if len(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 {
 			terms = podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+		}
+	}
+	return terms
+}
+
+// GetPodiAffinityTerms gets the affinity terms for the given pod.
+func GetPodAffinityTerms(podAffinity *v1.PodAffinity) (terms []v1.PodAffinityTerm) {
+	if podAffinity != nil {
+		if len(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution) != 0 {
+			terms = podAffinity.RequiredDuringSchedulingIgnoredDuringExecution
 		}
 	}
 	return terms
